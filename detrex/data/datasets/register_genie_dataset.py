@@ -59,7 +59,7 @@ def register_genie_dataset(name: str,
                                                              project_dir=project_dir))
     
     with open(os.path.join(project_dir, "metadata.json")) as j_file:
-        classes = json.load(j_file)
+        classes = json.load(j_file)["classes"]
 
     MetadataCatalog.get(name).set(
         thing_classes=classes, evaluator_type="coco", **metadata
