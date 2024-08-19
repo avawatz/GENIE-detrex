@@ -8,7 +8,7 @@ from detectron2.data import (
     build_detection_train_loader,
     get_detection_dataset_dicts,
 )
-from detectron2.evaluation import COCOEvaluator
+from detrex.evaluation.genie_evaluator import GENIECOCOEvaluator
 from detrex.data.genie_dataset_mapper import GENIEDatasetDETRMapper
 from detrex.data.datasets.register_genie_dataset import register_genie_dataset
 from detrex.data import DetrDatasetMapper
@@ -82,6 +82,7 @@ dataloader.test = L(build_detection_test_loader)(
     num_workers=4,
 )
 
-dataloader.evaluator = L(COCOEvaluator)(
+dataloader.evaluator = L(GENIECOCOEvaluator)(
     dataset_name="${..test.dataset.names}",
+    output_dir="./output"
 )
