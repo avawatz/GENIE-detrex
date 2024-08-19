@@ -4,11 +4,12 @@ import logging
 import numpy as np
 import torch
 
+from detrex.data.detr_dataset_mapper import DetrDatasetMapper
 from detectron2.data import detection_utils as utils
 from detectron2.data import transforms as T
 
 
-class GENIEDatasetDETRMapper:
+class GENIEDatasetDETRMapper(DetrDatasetMapper):
     def __init__(self, project_dir: str, **kwargs):
         self.project_dir = project_dir
         super().__init__(**kwargs)
@@ -23,10 +24,10 @@ class GENIEDatasetDETRMapper:
         """
         dataset_dict = copy.deepcopy(dataset_dict)  # it will be modified by code below
         if dataset_dict["augmented"]:
-            img_path = os.path.join(self.project_dir, "augmented_set", dataset_dict["filesname"])
+            img_path = os.path.join(self.project_dir, "augmented_set", dataset_dict["file_name"])
         else:
-            img_path = os.path.join(self.project_dir, "images", dataset_dict["filesname"])
-        assert os.path.isfile(img_path), f"The Image {dataset_dict['filesname']} is not found."
+            img_path = os.path.join(self.project_dir, "images", dataset_dict["file_name"])
+        assert os.path.isfile(img_path), f"The Image {dataset_dict['file_name']} is not found."
         image = utils.read_image(img_path, format=self.img_format)
         utils.check_image_size(dataset_dict, image)
 
@@ -66,4 +67,3 @@ class GENIEDatasetDETRMapper:
             instances = utils.annotations_to_instances(annos, image_shape)
             dataset_dict["instances"] = utils.filter_empty_instances(instances)
         return dataset_dict
-        
