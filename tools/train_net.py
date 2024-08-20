@@ -37,6 +37,7 @@ from detectron2.utils.events import (
     TensorboardXWriter
 )
 from detectron2.checkpoint import DetectionCheckpointer
+from detrex.hooks.genie_checkpoint_hook import GENIEWandBPeriodicCheckpointer
 # from detrex.checkpoint import DetectionCheckpointer
 
 from detrex.utils import WandbWriter
@@ -251,11 +252,11 @@ def do_train(args, cfg):
         [
             hooks.IterationTimer(),
             ema.EMAHook(cfg, model) if cfg.train.model_ema.enabled else None,
-            hooks.LRScheduler(scheduler=instantiate(cfg.lr_multiplier)),
-            hooks.PeriodicCheckpointer(checkpointer, **cfg.train.checkpointer)
+            hooks.LRScheduler(scheduler=instantiate(cfg.lr_multiplier))
             if comm.is_main_process()
             else None,
             hooks.EvalHook(cfg.train.eval_period, lambda: do_test(cfg, model)),
+            GENIEWandBPeriodicCheckpointer(checkpointer, **cfg.train.checkpointer),
             hooks.PeriodicWriter(
                 writers,
                 period=cfg.train.log_period,
@@ -264,6 +265,7 @@ def do_train(args, cfg):
             else None,
         ]
     )
+    print(trainer._hooks)
 
     checkpointer.resume_or_load(cfg.train.init_checkpoint, resume=args.resume)
     if args.resume and checkpointer.has_checkpoint():
@@ -285,6 +287,7 @@ def main(args):
         cfg.train.max_iter = 20
         cfg.train.eval_period = 10
         cfg.train.log_period = 1
+        cfg.train.checkpointer.period = cfg.train.eval_period
 
     if args.eval_only:
         model = instantiate(cfg.model)
