@@ -39,7 +39,7 @@ class GENIECOCOEvaluator(COCOEvaluator):
             """
 
             metrics = {
-                "bbox": ["mAP", "mAP@IoU-.50", "mAP@IoU-.75", "mAP-Small", "mAP-Medium", "mAP-Large", "mAR@Det1", "mAR@Det10", "mAR", "mAR-Small", "mAR-Medium", "mAR-Large"],
+                "bbox": ["mAP", "mAP@IoU.5", "mAP@IoU.75", "mAP-Small", "mAP-Medium", "mAP-Large", "mAR@Det1", "mAR@Det10", "mAR", "mAR-Small", "mAR-Medium", "mAR-Large"],
                 "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
                 "keypoints": ["AP", "AP50", "AP75", "APm", "APl"],
             }[iou_type]
@@ -80,7 +80,7 @@ class GENIECOCOEvaluator(COCOEvaluator):
                 ap = np.mean(precision) if precision.size else float("nan")
                 ar = np.mean(recall) if recall.size else float("nan")
                 results_per_category.append(("mAP-{}".format(name), float(ap * 100)))
-                results_per_category.append(("mAR-{}".format(name), float(ap * 100)))
+                results_per_category.append(("mAR-{}".format(name), float(ar * 100)))
 
 
             # tabulate it
