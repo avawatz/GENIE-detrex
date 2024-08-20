@@ -278,14 +278,15 @@ def do_train(args, cfg):
 
 
 def main(args):
+    os.environ["WANDB_API_KEY"] = ""
     cfg = LazyConfig.load(args.config_file)
     cfg = LazyConfig.apply_overrides(cfg, args.opts)
     default_setup(cfg, args)
     
     # Enable fast debugging by running several iterations to check for any bugs.
-    if cfg.train.fast_dev_run.enabled:
+    if True:
         cfg.train.max_iter = 20
-        cfg.train.eval_period = 10
+        cfg.train.eval_period = 5
         cfg.train.log_period = 1
         cfg.train.checkpointer.period = cfg.train.eval_period
 
