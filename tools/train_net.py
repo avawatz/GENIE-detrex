@@ -367,7 +367,7 @@ if __name__ == "__main__":
          "project_dir": "/content/kitti_dataset",
          "total_batch_size": 16,
          "num_workers": 2,
-         "wandb":{"api_key": "99dea7980c4adfe8963101138b7ec1779db0e6e3", 
+         "wandb":{"api_key": "", 
                   "project": "detrex_test_2"},
          "num_classes": 9}
                       
