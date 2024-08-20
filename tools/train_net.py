@@ -333,7 +333,7 @@ def main(args, custom_args):
     default_setup(cfg, args)
     
     # Enable fast debugging by running several iterations to check for any bugs.
-    if True:
+    if cfg.train.fast_dev_run.enabled:
         cfg.train.max_iter = 20
         cfg.train.eval_period = 5
         cfg.train.log_period = 1
