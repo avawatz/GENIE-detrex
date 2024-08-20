@@ -8,32 +8,36 @@ class GENIEWandBCheckpointer(PeriodicCheckpointer):
     def __init__(self, checkpointer, wandb_sync=True, **kwargs):
         self.wandb_sync = wandb_sync
         self.best_metric = -1
-        self.latest_path = None
         super().__init__(checkpointer, **kwargs)
 
     def _check_ckpt(self, iteration):
         assert has_event_storage(), "Event Storage not Found"
-        storage = get_event_storage().latest()
+        storage = get_event_storage().latest().copy()
         if storage.get('bbox/mAP@IoU.5', None) is not None:
             key = 'bbox/mAP@IoU.5'
         elif storage.get('segment/mAP@IoU.5', None) is not None: # The Key needs to be corrected
             key = 'segment/mAP@IoU.5'
         else:
             raise ValueError("The metric is not found at the Event storage. Always Run EvalHook before the running of this Hook.")
-        print(storage[key])
         assert storage.get(key)[-1] == iteration, f"The Latest evaluation iteration {storage.get(key)[-1]} doesn't match the current iteration {iteration}."
         if self.best_metric < storage[key][0]:
             self.best_metric = storage[key][0]
+            for key in list(storage.keys()):
+                if key.startswith('bbox') or key.startswith('segment'): # The Key needs to be corrected
+                    storage[key] = storage[key][0]
+                else:
+                    del storage[key]
             return True, storage
         else:
             return False, storage
 
-    def _log_ckpt_at_wandb(self, ckpt_path, iteration):
+    def _log_ckpt_at_wandb(self, ckpt_path, iteration, metadata):
         model_checkpoint_artifact = wandb.Artifact(f"run_{wandb.run.id}_model", 
-                                    "model")
+                                    "model",
+                                    metadata=metadata)
         model_checkpoint_artifact.add_file(ckpt_path)
         wandb.log_artifact(
-            model_checkpoint_artifact, aliases=[f"iteration_{iteration + 1}", "latest"]
+            model_checkpoint_artifact, aliases=[f"itr-{iteration + 1} mAP-{self.best_metric}", "latest"]
         )
 
     def step(self, iteration: int, final_iter: bool = False, **kwargs: Any) -> None:
@@ -60,8 +64,8 @@ class GENIEWandBCheckpointer(PeriodicCheckpointer):
             else:
                 print("NOT LOGGED THE CHECKPOINT")
             if self.wandb_sync and wandb.run is not None and ckpt_status:
-                ckpt_path = os.path.join(self.save_dir, "{}_{:07d}.pth".format(self.file_prefix, iteration))
-                self._log_ckpt_at_wandb(ckpt_path=ckpt_path, iteration=iteration)
+                ckpt_path = os.path.join(self.checkpointer.save_dir, "{}_{:07d}.pth".format(self.file_prefix, iteration))
+                self._log_ckpt_at_wandb(ckpt_path=ckpt_path, iteration=iteration, metadata=metadata)
 
             if self.max_to_keep is not None:
                 self.recent_checkpoints.append(self.checkpointer.get_checkpoint_file())
