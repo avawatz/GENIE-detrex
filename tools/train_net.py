@@ -147,6 +147,27 @@ class Trainer(SimpleTrainer):
             self.grad_scaler.load_state_dict(state_dict["grad_scaler"])
 
 
+
+def _format_output(self, table, columnns):
+    contents = dict()
+
+    contents["columns"] = columnns
+    contents["index"] = list()
+    contents["data"] = list()
+
+    for index, row in enumerate(table):
+        contents["index"].append(index)
+        contents["data"].append(row)
+
+    return contents
+
+
+def write_results(results):
+    assert results.get('bbox', None) is not None
+    results = results['bbox']
+    
+
+
 def do_test(cfg, model, eval_only=False):
     logger = logging.getLogger("detectron2")
 
@@ -161,6 +182,7 @@ def do_test(cfg, model, eval_only=False):
                 model, instantiate(cfg.dataloader.test), instantiate(cfg.dataloader.evaluator)
             )
             print_csv_format(ret)
+            print("RET", ret)
         return ret
     
     logger.info("Run evaluation without EMA.")
@@ -283,26 +305,27 @@ from detrex.evaluation.genie_evaluator import GENIECOCOEvaluator
 
 
 def modify_cfg(cfg, custom_args: dict):
-    register_genie_dataset(name="genie_test",
-                           data_ids={"evaluation_set": custom_args["data_ids"].pop("evaluation_set")},
-                           project_dir=custom_args["project_dir"],
-                           metadata={})
-    
-    register_genie_dataset(name="genie_train",
-                           data_ids=custom_args["data_ids"],
-                           project_dir=custom_args["project_dir"],
-                           metadata={})
-    
-    cfg.dataloader.train.dataset.names="genie_train"
-    cfg.dataloader.train.mapper['project_dir'] = custom_args["project_dir"]
-    cfg.dataloader.train.mapper._target_ = GENIEDatasetDETRMapper
-    cfg.dataloader.train.total_batch_size = custom_args["total_batch_size"]
-    cfg.dataloader.train.num_workers = custom_args["num_workers"]
+    if custom_args.get("data_ids", None) is not None:
+        register_genie_dataset(name="genie_test",
+                            data_ids={"evaluation_set": custom_args["data_ids"].pop("evaluation_set")},
+                            project_dir=custom_args["project_dir"],
+                            metadata={})
+        
+        register_genie_dataset(name="genie_train",
+                            data_ids=custom_args["data_ids"],
+                            project_dir=custom_args["project_dir"],
+                            metadata={})
+        
+        cfg.dataloader.train.dataset.names="genie_train"
+        cfg.dataloader.train.mapper['project_dir'] = custom_args["project_dir"]
+        cfg.dataloader.train.mapper._target_ = GENIEDatasetDETRMapper
+        cfg.dataloader.train.total_batch_size = custom_args["total_batch_size"]
+        cfg.dataloader.train.num_workers = custom_args["num_workers"]
 
-    cfg.dataloader.test.dataset.names="genie_test"
-    cfg.dataloader.test.mapper['project_dir'] = custom_args["project_dir"]
-    cfg.dataloader.test.mapper._target_ = GENIEDatasetDETRMapper
-    cfg.dataloader.test.num_workers = custom_args["num_workers"]
+        cfg.dataloader.test.dataset.names="genie_test"
+        cfg.dataloader.test.mapper['project_dir'] = custom_args["project_dir"]
+        cfg.dataloader.test.mapper._target_ = GENIEDatasetDETRMapper
+        cfg.dataloader.test.num_workers = custom_args["num_workers"]
 
     cfg.dataloader.evaluator["output_dir"] = custom_args["cache_dir"]
     cfg.dataloader.evaluator._target_ = GENIECOCOEvaluator
@@ -313,6 +336,7 @@ def modify_cfg(cfg, custom_args: dict):
         cfg.train.wandb.enabled = True
         cfg.train.wandb.params.project = custom_args["wandb"]["project"]
         cfg.train.wandb.params.name = None
+        cfg.train.wandb.dir = wandb_cache_dir
         os.environ["WANDB_CACHE_DIR"] = wandb_cache_dir
         os.environ["WANDB_API_KEY"] = custom_args["wandb"]["api_key"]
 
@@ -333,7 +357,7 @@ def main(args, custom_args):
     default_setup(cfg, args)
     
     # Enable fast debugging by running several iterations to check for any bugs.
-    if cfg.train.fast_dev_run.enabled:
+    if True:
         cfg.train.max_iter = 20
         cfg.train.eval_period = 5
         cfg.train.log_period = 1
@@ -360,6 +384,7 @@ if __name__ == "__main__":
     args.config_file = "/content/GENIE-detrex/projects/detr/configs/detr_r50_300ep.py"
     args.num_machines = 1
     args.num_gpus = 1
+    args.eval_only = True
     d = {"cache_dir": "/content/test_cache",
          "data_ids": {"unlabelled_set": os.listdir("/content/kitti_dataset/images")[:25],
                       "augmented_set": os.listdir("/content/kitti_dataset/images")[25:50],
@@ -367,9 +392,10 @@ if __name__ == "__main__":
          "project_dir": "/content/kitti_dataset",
          "total_batch_size": 16,
          "num_workers": 2,
-         "wandb":{"api_key": "", 
+         "wandb":{"api_key": "a7394e5afe18994d4dc33a0f927a70be4b4e6fd7", 
                   "project": "detrex_test_2"},
-         "num_classes": 9}
+         "num_classes": 9,
+         "init_checkpoint": "/content/test_cache/model_0000020.pth"}
                       
     launch(
         main,
