@@ -11,6 +11,7 @@ from detectron2.data import MetadataCatalog
 from detectron2.structures import Instances
 from detectron2.utils.video_visualizer import VideoVisualizer
 from detectron2.utils.visualizer import ColorMode, Visualizer
+import torch.nn.functional as F
 
 
 def filter_predictions_with_confidence(predictions, confidence_threshold=0.5):
@@ -199,15 +200,82 @@ class DefaultPredictor:
             if self.input_format == "RGB":
                 # whether the model expects BGR inputs or RGB
                 original_image = original_image[:, :, ::-1]
-            height, width = original_image.shape[:2]
             image = self.aug.get_transform(original_image).apply_image(original_image)
             image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
-
+            
+            height, width = original_image.shape[:2]
             inputs = {"image": image, "height": height, "width": width}
             predictions = self.model([inputs])[0]
             return predictions
 
 
+
+class GENIEPredictor:
+    def __init__(self,
+                 model,
+                 min_size_test=800,
+                 max_size_test=1333,
+                 img_format="RGB",
+                 metadata_dataset="genie_test",
+                 confidence_threshold=0.5):
+        self.model=model
+        self.model.eval()
+        self.metadata = MetadataCatalog.get(metadata_dataset)
+        self.aug = T.ResizeShortestEdge([min_size_test, min_size_test], max_size_test)
+        self.input_format = img_format
+        self.confidence_threshold = confidence_threshold
+        assert self.input_format in ["RGB", "BGR"], self.input_format
+
+    def get_embeddings(self, batched_inputs: list):
+        images = self.model.preprocess_image(batched_inputs)
+        features = self.model.backbone(images.tensor)[self.model.in_features[-1]]
+        features = torch.flatten(features, start_dim=2, end_dim=len(features.shape)-1).mean(dim=-1)
+        return features
+
+    def get_all_probs(self, batched_inputs: list, threshold: float = 0.5):
+        images = self.model.preprocess_image(batched_inputs)
+        batch_size, _, H, W = images.tensor.shape
+        img_masks = images.tensor.new_zeros(batch_size, H, W)
+
+        # only use last level feature in DETR
+        features = self.model.backbone(images.tensor)[self.model.in_features[-1]]
+        features = self.model.input_proj(features)
+        img_masks = F.interpolate(img_masks[None], size=features.shape[-2:]).to(torch.bool)[0]
+        pos_embed = self.model.position_embedding(img_masks)
+        hidden_states, _ = self.model.transformer(features, img_masks, self.model.query_embed.weight, pos_embed)
+        outputs_class = self.model.class_embed(hidden_states)[-1]
+        scores = F.softmax(outputs_class, dim=-1)[:, :, :-1]
+
+        return scores[scores.max(-1)[0] >= threshold]
+
+
+    def __call__(self, original_image, return_type="all", as_numpy=False):
+        if self.input_format == "RGB":
+            original_image = original_image[:, :, ::-1]
+        image = self.aug.get_transform(original_image).apply_image(original_image)
+        image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
+        height, width = original_image.shape[:2]
+        inputs = {"image": image, "height": height, "width": width}
+
+        with torch.no_grad():
+            if return_type == "all":
+                predictions = self.model([inputs])[0]
+                predictions = filter_predictions_with_confidence(predictions, self.confidence_threshold)
+                return predictions
+            elif return_type == "all_probs":
+                if as_numpy:
+                    return self.get_all_probs([inputs], self.confidence_threshold).cpu().numpy()
+                else:
+                    return self.get_all_probs([inputs], self.confidence_threshold)
+            elif return_type == "embeddings":
+                if as_numpy:
+                    return self.get_embeddings([inputs]).cpu().numpy()
+                else:
+                    return self.get_embeddings([inputs])
+            else:
+                raise ValueError(f"Invalid return_type - {return_type}. should be only among ['all', 'all_probs', 'emebddings']")
+
+            
 class AsyncPredictor:
     """
     A predictor that runs the model asynchronously, possibly on >1 GPUs.
