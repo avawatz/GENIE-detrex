@@ -228,7 +228,8 @@ class GENIEPredictor:
 
     def get_embeddings(self, batched_inputs: list):
         images = self.model.preprocess_image(batched_inputs)
-        features = self.model.backbone(images.tensor)[self.model.in_features[-1]]
+        features = self.model.backbone(images.tensor)
+        features = features[list(features.keys())[0]]
         features = torch.flatten(features, start_dim=2, end_dim=len(features.shape)-1).mean(dim=-1)
         return features
 
