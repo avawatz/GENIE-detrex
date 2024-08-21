@@ -12,11 +12,12 @@ import cv2
 import tqdm
 
 sys.path.insert(0, "./")  # noqa
-from demo.predictors import VisualizationDemo
+from demo.predictors import GENIEPredictor
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import LazyConfig, instantiate
 from detectron2.data.detection_utils import read_image
 from detectron2.utils.logger import setup_logger
+from tools.train_net import modify_cfg
 
 
 # constants
@@ -83,7 +84,7 @@ def get_parser():
     parser.add_argument(
         "--opts",
         help="Modify config options using the command-line",
-        default=None,
+        default=[],
         nargs=argparse.REMAINDER,
     )
     return parser
@@ -106,14 +107,18 @@ def test_opencv_video_format(codec, file_ext):
         return False
 
 
-if __name__ == "__main__":
-    mp.set_start_method("spawn", force=True)
+def custom_inference_main(custom_settings):
+    # mp.set_start_method("spawn", force=True)
     args = get_parser().parse_args()
+
     setup_logger(name="fvcore")
     logger = setup_logger()
     logger.info("Arguments: " + str(args))
 
+    args.metadata_dataset = "genie_test"
+    args.output = custom_settings["save_dir"]
     cfg = setup(args)
+    cfg = modify_cfg(cfg, custom_settings)
 
     model = instantiate(cfg.model)
     model.to(cfg.train.device)
@@ -122,7 +127,7 @@ if __name__ == "__main__":
 
     model.eval()
 
-    demo = VisualizationDemo(
+    demo = GENIEPredictor(
         model=model,
         min_size_test=args.min_size_test,
         max_size_test=args.max_size_test,
@@ -130,15 +135,19 @@ if __name__ == "__main__":
         metadata_dataset=args.metadata_dataset,
     )
 
-    if args.input:
-        if len(args.input) == 1:
-            args.input = glob.glob(os.path.expanduser(args.input[0]))
-            assert args.input, "The input path(s) was not found"
-        for path in tqdm.tqdm(args.input, disable=not args.output):
+    if custom_settings["files"]:
+        # if len(args.input) == 1:
+        #     args.input = glob.glob(os.path.expanduser(args.input[0]))
+        #     assert args.input, "The input path(s) was not found"
+        for path in tqdm.tqdm(custom_settings["files"]):
             # use PIL, to be consistent with evaluation
+            path = os.path.join(custom_settings['project_dir'], 'images', path)
             img = read_image(path, format="BGR")
             start_time = time.time()
-            predictions, visualized_output = demo.run_on_image(img, args.confidence_threshold)
+            print(demo(img))
+            print(demo(img, return_type="all_probs").shape)
+            print(demo(img, return_type="embeddings").shape)
+            # predictions, visualized_output = demo.run_on_image(img, args.confidence_threshold)
             logger.info(
                 "{}: {} in {:.2f}s".format(
                     path,
@@ -148,20 +157,20 @@ if __name__ == "__main__":
                     time.time() - start_time,
                 )
             )
-
-            if args.output:
-                if os.path.isdir(args.output):
-                    assert os.path.isdir(args.output), args.output
-                    out_filename = os.path.join(args.output, os.path.basename(path))
-                else:
-                    assert len(args.input) == 1, "Please specify a directory with args.output"
-                    out_filename = args.output
-                visualized_output.save(out_filename)
-            else:
-                cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
-                cv2.imshow(WINDOW_NAME, visualized_output.get_image()[:, :, ::-1])
-                if cv2.waitKey(0) == 27:
-                    break  # esc to quit
+            # print(predictions)
+            # if args.output:
+            #     if os.path.isdir(args.output):
+            #         assert os.path.isdir(args.output), args.output
+            #         out_filename = os.path.join(args.output, os.path.basename(path))
+            #     else:
+            #         assert len(args.input) == 1, "Please specify a directory with args.output"
+            #         out_filename = args.output
+            #     visualized_output.save(out_filename)
+            # else:
+            #     cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+            #     cv2.imshow(WINDOW_NAME, visualized_output.get_image()[:, :, ::-1])
+            #     if cv2.waitKey(0) == 27:
+            #         break  # esc to quit
     elif args.webcam:
         assert args.input is None, "Cannot have both --input and --webcam!"
         assert args.output is None, "output not yet supported with --webcam!"
@@ -215,3 +224,17 @@ if __name__ == "__main__":
             output_file.release()
         else:
             cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    save_dir = "./test"
+    os.makedirs(save_dir, exist_ok=True)
+    cfg = {"cache_dir": "/content/test_cache",
+         "files": os.listdir("/content/kitti_dataset/images")[:25],
+         "project_dir": "/content/kitti_dataset",
+         "total_batch_size": 16,
+         "num_workers": 2,
+         "num_classes": 80,
+         "init_checkpoint": "/content/GENIE-detrex/converted_detr_r50_500ep.pth",
+         "save_dir": save_dir}
+    custom_inference_main(custom_settings=cfg)
