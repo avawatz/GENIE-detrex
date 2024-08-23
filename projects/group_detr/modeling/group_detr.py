@@ -75,6 +75,7 @@ class GroupDETR(nn.Module):
         pixel_std: List[float] = [58.395, 57.120, 57.375],
         select_box_nums_for_evaluation: int = 300,
         device: str = "cuda",
+        return_all_probs: bool = False
     ):
         super(GroupDETR, self).__init__()
         # define backbone and position embedding module
@@ -110,6 +111,7 @@ class GroupDETR(nn.Module):
         self.select_box_nums_for_evaluation = select_box_nums_for_evaluation
 
         self.init_weights()
+        self.return_all_probs = return_all_probs
 
     def init_weights(self):
         """Initialize weights for Conditioanl-DETR."""
@@ -183,7 +185,8 @@ class GroupDETR(nn.Module):
             outputs_coords.append(outputs_coord)
         outputs_coord = torch.stack(outputs_coords)
         outputs_class = self.class_embed(hidden_states)
-
+        if self.return_all_probs:
+            return outputs_class[-1]
         output = {"pred_logits": outputs_class[-1], "pred_boxes": outputs_coord[-1]}
         if self.aux_loss:
             output["aux_outputs"] = self._set_aux_loss(outputs_class, outputs_coord)

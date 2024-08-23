@@ -70,6 +70,7 @@ class DabDeformableDETR(nn.Module):
         as_two_stage: bool = False,
         select_box_nums_for_evaluation: int = 300,
         device="cuda",
+        return_all_probs: bool = False
     ):
         super().__init__()
         # define backbone and position embedding module
@@ -145,6 +146,8 @@ class DabDeformableDETR(nn.Module):
         pixel_mean = torch.Tensor(pixel_mean).to(self.device).view(3, 1, 1)
         pixel_std = torch.Tensor(pixel_std).to(self.device).view(3, 1, 1)
         self.normalizer = lambda x: (x - pixel_mean) / pixel_std
+
+        self.return_all_probs = return_all_probs
 
     def forward(self, batched_inputs):
         """Forward function of `DAB-Deformable-DETR` which excepts a list of dict as inputs.
@@ -239,6 +242,8 @@ class DabDeformableDETR(nn.Module):
         # tensor shape: [num_decoder_layers, bs, num_query, num_classes]
         outputs_coord = torch.stack(outputs_coords)
         # tensor shape: [num_decoder_layers, bs, num_query, 4]
+        if self.return_all_probs:
+            return outputs_class[-1]
 
         # prepare for loss computation
         output = {"pred_logits": outputs_class[-1], "pred_boxes": outputs_coord[-1]}

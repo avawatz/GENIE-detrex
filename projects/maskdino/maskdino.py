@@ -50,6 +50,7 @@ class MaskDINO(nn.Module):
         focus_on_box: bool = False,
         transform_eval: bool = False,
         semantic_ce_loss: bool = False,
+        return_all_probs = False
     ):
         """
         Args:
@@ -104,6 +105,7 @@ class MaskDINO(nn.Module):
         self.focus_on_box = focus_on_box
         self.transform_eval = transform_eval
         self.semantic_ce_loss = semantic_ce_loss
+        self.return_all_probs = return_all_probs
 
         if not self.semantic_on:
             assert self.sem_seg_postprocess_before_inference
@@ -170,6 +172,8 @@ class MaskDINO(nn.Module):
             return losses
         else:
             outputs, _ = self.sem_seg_head(features)
+            if self.return_all_probs:
+                return outputs['pred_logits']
             mask_cls_results = outputs["pred_logits"]
             mask_pred_results = outputs["pred_masks"]
             mask_box_results = outputs["pred_boxes"]

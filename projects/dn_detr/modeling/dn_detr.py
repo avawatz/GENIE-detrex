@@ -79,6 +79,7 @@ class DNDETR(nn.Module):
         box_noise_scale: float = 0.4,
         with_indicator: bool = True,
         device="cuda",
+        return_all_probs: bool = False
     ):
         super(DNDETR, self).__init__()
         # define backbone and position embedding module
@@ -134,6 +135,7 @@ class DNDETR(nn.Module):
 
         # The total nums of selected boxes for evaluation
         self.select_box_nums_for_evaluation = select_box_nums_for_evaluation
+        self.return_all_probs = return_all_probs
 
         self.init_weights()
 
@@ -260,7 +262,8 @@ class DNDETR(nn.Module):
             "max_gt_num_per_image": torch.tensor(max_gt_num_per_image).to(self.device),
         }
         outputs_class, outputs_coord = self.dn_post_process(outputs_class, outputs_coord, output)
-
+        if self.return_all_probs:
+            return outputs_class[-1]
         output.update({"pred_logits": outputs_class[-1], "pred_boxes": outputs_coord[-1]})
         if self.aux_loss:
             output["aux_outputs"] = self._set_aux_loss(outputs_class, outputs_coord)

@@ -78,6 +78,7 @@ class DINO(nn.Module):
         box_noise_scale: float = 1.0,
         input_format: Optional[str] = "RGB",
         vis_period: int = 0,
+        return_all_probs: bool = False
     ):
         super().__init__()
         # define backbone and position embedding module
@@ -148,6 +149,7 @@ class DINO(nn.Module):
         self.vis_period = vis_period
         if vis_period > 0:
             assert input_format is not None, "input_format is required for visualization!"
+        self.return_all_probs = False
 
 
     def _move_to_current_device(self, x):
@@ -275,6 +277,9 @@ class DINO(nn.Module):
             )
 
         # prepare for loss computation
+        if self.return_all_probs:
+            return outputs_class[-1]
+            
         output = {"pred_logits": outputs_class[-1], "pred_boxes": outputs_coord[-1]}
         if self.aux_loss:
             output["aux_outputs"] = self._set_aux_loss(outputs_class, outputs_coord)

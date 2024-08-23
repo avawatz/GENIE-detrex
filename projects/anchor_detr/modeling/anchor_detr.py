@@ -64,6 +64,7 @@ class AnchorDETR(nn.Module):
         pixel_std: List[float] = [58.395, 57.120, 57.375],
         select_box_nums_for_evaluation: int = 100,
         device: str = "cuda",
+        return_all_probs: bool = False
     ):
         super(AnchorDETR, self).__init__()
         # define backbone and position embedding module
@@ -90,6 +91,7 @@ class AnchorDETR(nn.Module):
 
         # The total nums of selected boxes for evaluation
         self.select_box_nums_for_evaluation = select_box_nums_for_evaluation
+        self.return_all_probs = return_all_probs
 
 
     def forward(self, batched_inputs):
@@ -137,6 +139,9 @@ class AnchorDETR(nn.Module):
         img_masks = F.interpolate(img_masks[None], size=features.shape[-2:]).to(torch.bool)[0]
 
         outputs_class, outputs_coord = self.transformer(features, img_masks)
+
+        if self.return_all_probs:
+            return outputs_class[-1]
 
         output = {"pred_logits": outputs_class[-1], "pred_boxes": outputs_coord[-1]}
         if self.aux_loss:

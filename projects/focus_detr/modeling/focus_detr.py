@@ -76,6 +76,7 @@ class FOCUS_DETR(nn.Module):
         dn_number: int = 100,
         label_noise_ratio: float = 0.2,
         box_noise_scale: float = 1.0,
+        return_all_probs: bool = False
     ):
         super().__init__()
         # define backbone and position embedding module
@@ -137,6 +138,7 @@ class FOCUS_DETR(nn.Module):
             nn.init.constant_(bbox_embed_layer.layers[-1].bias.data[2:], 0.0)
         # set topk boxes selected for inference
         self.select_box_nums_for_evaluation = select_box_nums_for_evaluation
+        self.return_all_probs = return_all_probs
 
     def forward(self, batched_inputs):
         """Forward function of `DINO` which excepts a list of dict as inputs.
@@ -254,7 +256,8 @@ class FOCUS_DETR(nn.Module):
             outputs_class, outputs_coord = self.dn_post_process(
                 outputs_class, outputs_coord, dn_meta
             )
-
+        if self.return_all_probs:
+            return outputs_class[-1]
         # prepare for loss computation
         output = {"pred_logits": outputs_class[-1], "pred_boxes": outputs_coord[-1]}
         if self.aux_loss:

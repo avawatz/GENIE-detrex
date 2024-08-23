@@ -208,7 +208,7 @@ class HDeformableDetrTransformerDecoder(TransformerLayerSequence):
             if self.return_intermediate:
                 intermediate.append(output)
                 intermediate_reference_points.append(
-                    new_reference_points if self.look_forward_twice else reference_points
+                    new_reference_points if self.look_forward_twice and self.bbox_embed is not None else reference_points
                 )
 
         if self.return_intermediate:

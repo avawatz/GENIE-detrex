@@ -69,6 +69,7 @@ class AlignDETR(nn.Module):
         label_noise_ratio: float = 0.2,
         box_noise_scale: float = 1.0,
         prior_init=0.01,
+        return_all_probs = False
     ):
         super().__init__()
         # define backbone and position embedding module
@@ -133,6 +134,7 @@ class AlignDETR(nn.Module):
 
         # set topk boxes selected for inference
         self.select_box_nums_for_evaluation = select_box_nums_for_evaluation
+        self.return_all_probs = return_all_probs
 
     def forward(self, batched_inputs):
         """Forward function of `DINO` which excepts a list of dict as inputs.
@@ -251,6 +253,9 @@ class AlignDETR(nn.Module):
             outputs_class, outputs_coord = self.dn_post_process(
                 outputs_class, outputs_coord, dn_meta
             )
+        
+        if self.return_all_probs:
+            return outputs_class[-1]
 
         # prepare for loss computation
         output = {"pred_logits": outputs_class[-1], "pred_boxes": outputs_coord[-1]}

@@ -78,6 +78,7 @@ class ConditionalDETR(nn.Module):
         pixel_std: List[float] = [58.395, 57.120, 57.375],
         select_box_nums_for_evaluation: int = 300,
         device: str = "cuda",
+        return_all_probs: bool = False
     ):
         super(ConditionalDETR, self).__init__()
         # define backbone and position embedding module
@@ -110,6 +111,7 @@ class ConditionalDETR(nn.Module):
 
         # The total nums of selected boxes for evaluation
         self.select_box_nums_for_evaluation = select_box_nums_for_evaluation
+        self.return_all_probs = return_all_probs
 
         self.init_weights()
 
@@ -179,6 +181,9 @@ class ConditionalDETR(nn.Module):
             outputs_coords.append(outputs_coord)
         outputs_coord = torch.stack(outputs_coords)
         outputs_class = self.class_embed(hidden_states)
+
+        if self.return_all_probs:
+            return outputs_class[-1]
 
         output = {"pred_logits": outputs_class[-1], "pred_boxes": outputs_coord[-1]}
         if self.aux_loss:

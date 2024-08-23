@@ -71,6 +71,7 @@ class DNDeformableDETR(nn.Module):
         with_indicator: bool = True,
         select_box_nums_for_evaluation: int = 300,
         device="cuda",
+        return_all_probs=False
     ):
         super().__init__()
         # define backbone and position embedding module
@@ -166,6 +167,7 @@ class DNDeformableDETR(nn.Module):
                 nn.init.constant_(bbox_embed_layer.layers[-1].bias.data[2:], 0.0)
 
         self.select_box_nums_for_evaluation = select_box_nums_for_evaluation
+        self.return_all_probs = return_all_probs
 
     def forward(self, batched_inputs):
         """Forward function of `DN-Deformable-DETR` which excepts a list of dict as inputs.
@@ -299,7 +301,8 @@ class DNDeformableDETR(nn.Module):
             "max_gt_num_per_image": torch.tensor(max_gt_num_per_image).to(self.device),
         }
         outputs_class, outputs_coord = self.dn_post_process(outputs_class, outputs_coord, output)
-
+        if self.return_all_probs:
+            return outputs_class[-1]
         output.update({"pred_logits": outputs_class[-1], "pred_boxes": outputs_coord[-1]})
         if self.aux_loss:
             output["aux_outputs"] = self._set_aux_loss(outputs_class, outputs_coord)

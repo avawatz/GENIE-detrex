@@ -77,6 +77,7 @@ class HDeformableDETR(nn.Module):
         mixed_selection=True,
         k_one2many=6,
         lambda_one2many=1.0,
+        return_all_probs=False
     ):
         super().__init__()
         num_queries = num_queries_one2one + num_queries_one2many
@@ -160,6 +161,7 @@ class HDeformableDETR(nn.Module):
         self.mixed_selection = mixed_selection
         self.k_one2many = k_one2many
         self.lambda_one2many = lambda_one2many
+        self.return_all_probs = return_all_probs
 
     def forward(self, batched_inputs):
         images = self.preprocess_image(batched_inputs)
@@ -269,6 +271,9 @@ class HDeformableDETR(nn.Module):
         # tensor shape: [num_decoder_layers, bs, num_queries_one2many, 4]
 
         # prepare for loss computation
+        if self.return_all_probs:
+            return outputs_classes_one2one[-1]
+
         output = {
             "pred_logits": outputs_classes_one2one[-1],
             "pred_boxes": outputs_coords_one2one[-1],
@@ -289,6 +294,7 @@ class HDeformableDETR(nn.Module):
                 "pred_logits": enc_outputs_class,
                 "pred_boxes": enc_outputs_coord,
             }
+            
 
         if self.training:
             gt_instances = [x["instances"].to(self.device) for x in batched_inputs]

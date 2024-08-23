@@ -44,6 +44,7 @@ class DabDetrTransformerDecoder_qr(TransformerLayerSequence):
         batch_first: bool = False,
         post_norm: bool = True,
         return_intermediate: bool = True,
+        return_all_probs: bool = False
     ):
         super(DabDetrTransformerDecoder_qr, self).__init__(
             transformer_layers=BaseTransformerLayer(

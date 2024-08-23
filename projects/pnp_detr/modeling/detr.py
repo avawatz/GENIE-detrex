@@ -70,6 +70,7 @@ class PnPDETR(nn.Module):
         pixel_mean: List[float] = [123.675, 116.280, 103.530],
         pixel_std: List[float] = [58.395, 57.120, 57.375],
         device: str = "cuda",
+        return_all_probs: bool = False
     ):
         super().__init__()
         # define backbone and position embedding module
@@ -102,6 +103,7 @@ class PnPDETR(nn.Module):
         pixel_mean = torch.Tensor(pixel_mean).to(self.device).view(3, 1, 1)
         pixel_std = torch.Tensor(pixel_std).to(self.device).view(3, 1, 1)
         self.normalizer = lambda x: (x - pixel_mean) / pixel_std
+        self.return_all_probs = return_all_probs
 
     def forward(self, batched_inputs):
         """Forward function of `DAB-DETR` which excepts a list of dict as inputs.
@@ -149,6 +151,8 @@ class PnPDETR(nn.Module):
         hidden_states, sample_reg_loss = self.transformer(features, img_masks, self.query_embed.weight, pos_embed, self.test_time_sample_ratio)
 
         outputs_class = self.class_embed(hidden_states)
+        if self.return_all_probs:
+            return outputs_class[-1]
         outputs_coord = self.bbox_embed(hidden_states).sigmoid()
         output = {"pred_logits": outputs_class[-1], "pred_boxes": outputs_coord[-1]}
         if self.aux_loss:

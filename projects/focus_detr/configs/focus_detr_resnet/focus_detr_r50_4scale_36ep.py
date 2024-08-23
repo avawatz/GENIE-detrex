@@ -8,7 +8,7 @@ from .focus_detr_r50_4scale_12ep import (
 )
 
 # get default config
-lr_multiplier = get_config("common/coco_schedule.py").lr_multiplier_24_36ep
+lr_multiplier = get_config("common/coco_schedule.py").lr_multiplier_36ep
 
 # modify model config
 # use the original implementation of dab-detr position embedding in 24 epochs training.
