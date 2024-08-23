@@ -327,8 +327,8 @@ def modify_cfg(cfg, custom_args: dict):
         cfg.dataloader.test.mapper._target_ = GENIEDatasetDETRMapper
         cfg.dataloader.test.num_workers = custom_args["num_workers"]
 
-    cfg.dataloader.evaluator["output_dir"] = custom_args["cache_dir"]
-    cfg.dataloader.evaluator._target_ = GENIECOCOEvaluator
+        cfg.dataloader.evaluator["output_dir"] = custom_args["cache_dir"]
+        cfg.dataloader.evaluator._target_ = GENIECOCOEvaluator
 
     if custom_args.get("wandb", None) is not None:
         wandb_cache_dir = os.path.join(custom_args["cache_dir"], "wandb_cache")
@@ -345,8 +345,10 @@ def modify_cfg(cfg, custom_args: dict):
     cfg.train.output_dir = custom_args["cache_dir"]
     cfg.train.checkpointer.period = cfg.train.eval_period
 
-    cfg.model.num_classes = custom_args["num_classes"]
-    cfg.model.criterion.num_classes = custom_args["num_classes"]
+    if cfg.model.get("num_classes", None) is not None:
+        cfg.model.num_classes = custom_args["num_classes"]
+    if cfg.model.criterion.get("num_classes", None) is not None:
+        cfg.model.criterion.num_classes = custom_args["num_classes"]
 
     return cfg
 

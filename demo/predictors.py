@@ -209,7 +209,6 @@ class DefaultPredictor:
             return predictions
 
 
-
 class GENIEPredictor:
     def __init__(self,
                  model,
@@ -217,36 +216,30 @@ class GENIEPredictor:
                  max_size_test=1333,
                  img_format="RGB",
                  metadata_dataset="genie_test",
-                 confidence_threshold=0.5):
+                 confidence_threshold=0.5,
+                 high_embed: bool = False): # Multiple Feature Embeddings. If sets to true returns embedding with high dim.
         self.model=model
         self.model.eval()
         self.metadata = MetadataCatalog.get(metadata_dataset)
         self.aug = T.ResizeShortestEdge([min_size_test, min_size_test], max_size_test)
         self.input_format = img_format
         self.confidence_threshold = confidence_threshold
+        self.high_embed = high_embed
         assert self.input_format in ["RGB", "BGR"], self.input_format
 
     def get_embeddings(self, batched_inputs: list):
         images = self.model.preprocess_image(batched_inputs)
+        if isinstance(images, tuple):
+            images = images[0]
         features = self.model.backbone(images.tensor)
-        features = features[list(features.keys())[0]]
+        features = features[list(features.keys())[1 if self.high_embed else 0]]
         features = torch.flatten(features, start_dim=2, end_dim=len(features.shape)-1).mean(dim=-1)
         return features
 
     def get_all_probs(self, batched_inputs: list, threshold: float = 0.5):
-        images = self.model.preprocess_image(batched_inputs)
-        batch_size, _, H, W = images.tensor.shape
-        img_masks = images.tensor.new_zeros(batch_size, H, W)
-
-        # only use last level feature in DETR
-        features = self.model.backbone(images.tensor)[self.model.in_features[-1]]
-        features = self.model.input_proj(features)
-        img_masks = F.interpolate(img_masks[None], size=features.shape[-2:]).to(torch.bool)[0]
-        pos_embed = self.model.position_embedding(img_masks)
-        hidden_states, _ = self.model.transformer(features, img_masks, self.model.query_embed.weight, pos_embed)
-        outputs_class = self.model.class_embed(hidden_states)[-1]
-        scores = F.softmax(outputs_class, dim=-1)[:, :, :-1]
-
+        self.model.return_all_probs = True
+        scores = self.model(batched_inputs)
+        scores = F.softmax(scores, dim=-1)[:, :, :-1]
         return scores[scores.max(-1)[0] >= threshold]
 
 
@@ -261,7 +254,7 @@ class GENIEPredictor:
         with torch.no_grad():
             if return_type == "all":
                 predictions = self.model([inputs])[0]
-                predictions = filter_predictions_with_confidence(predictions, self.confidence_threshold)
+                # predictions = filter_predictions_with_confidence(predictions, self.confidence_threshold)
                 return predictions
             elif return_type == "all_probs":
                 if as_numpy:
