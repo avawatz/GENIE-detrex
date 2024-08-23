@@ -37,7 +37,7 @@ class GENIEWandBCheckpointer(PeriodicCheckpointer):
                                     metadata=metadata)
         model_checkpoint_artifact.add_file(ckpt_path)
         wandb.log_artifact(
-            model_checkpoint_artifact, aliases=[f"itr-{iteration + 1} mAP-{self.best_metric}", "latest"]
+            model_checkpoint_artifact, aliases=[f"itr-{iteration + 1} mAP-{round(self.best_metric, 3)}", "latest"]
         )
 
     def step(self, iteration: int, final_iter: bool = False, **kwargs: Any) -> None:
