@@ -63,6 +63,6 @@ class WandbWriter(EventWriter):
             # In that case a writer may not see all image data if its period is long.
             storage.clear_images()
     
-    def close(self):
+    def __del__(self):
         if hasattr(self, "_writer"):
             self._writer.finish()

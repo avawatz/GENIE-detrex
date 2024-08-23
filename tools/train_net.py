@@ -359,11 +359,11 @@ def main(args, custom_args):
     default_setup(cfg, args)
     
     # Enable fast debugging by running several iterations to check for any bugs.
-    if True:
+    if cfg.train.fast_dev_run.enabled:
         cfg.train.max_iter = 20
         cfg.train.eval_period = 5
         cfg.train.log_period = 1
-        cfg.train.checkpointer.period = cfg.train.eval_period
+    cfg.train.checkpointer.period = cfg.train.eval_period
 
     if args.eval_only:
         model = instantiate(cfg.model)
@@ -381,29 +381,17 @@ def main(args, custom_args):
         do_train(args, cfg)
 
 
-if __name__ == "__main__":
+def custom_main(config, only_eval=False, num_gpus=1):
     args = default_argument_parser().parse_args()
-    args.config_file = "/content/GENIE-detrex/projects/detr/configs/detr_r50_300ep.py"
+    args.config_file = config["config_file"]
     args.num_machines = 1
-    args.num_gpus = 1
-    args.eval_only = True
-    d = {"cache_dir": "/content/test_cache",
-         "data_ids": {"unlabelled_set": os.listdir("/content/kitti_dataset/images")[:25],
-                      "augmented_set": os.listdir("/content/kitti_dataset/images")[25:50],
-                      "evaluation_set": os.listdir("/content/kitti_dataset/images")[50:75]},
-         "project_dir": "/content/kitti_dataset",
-         "total_batch_size": 16,
-         "num_workers": 2,
-         "wandb":{"api_key": "a7394e5afe18994d4dc33a0f927a70be4b4e6fd7", 
-                  "project": "detrex_test_2"},
-         "num_classes": 9,
-         "init_checkpoint": "/content/test_cache/model_0000020.pth"}
-                      
+    args.num_gpus = num_gpus
+    args.eval_only = only_eval
     launch(
         main,
         args.num_gpus,
         num_machines=args.num_machines,
         machine_rank=args.machine_rank,
         dist_url=args.dist_url,
-        args=(args, d, ),
+        args=(args, config, ),
     )
