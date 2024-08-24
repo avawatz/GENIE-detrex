@@ -307,22 +307,24 @@ from detrex.evaluation.genie_evaluator import GENIECOCOEvaluator
 def modify_cfg(cfg, custom_args: dict):
     if custom_args.get("data_ids", None) is not None:
         register_genie_dataset(name="genie_test",
-                            data_ids={"evaluation_set": custom_args["data_ids"].pop("evaluation_set")},
-                            project_dir=custom_args["project_dir"],
-                            metadata={})
-        
+                               data_ids={"evaluation_set": custom_args["data_ids"].pop("evaluation_set")},
+                               project_dir=custom_args["project_dir"],
+                               num_classes=custom_args["num_classes"],
+                               metadata={})
+
         register_genie_dataset(name="genie_train",
-                            data_ids=custom_args["data_ids"],
-                            project_dir=custom_args["project_dir"],
-                            metadata={})
-        
-        cfg.dataloader.train.dataset.names="genie_train"
+                               data_ids=custom_args["data_ids"],
+                               project_dir=custom_args["project_dir"],
+                               num_classes=custom_args["num_classes"],
+                               metadata={})
+
+        cfg.dataloader.train.dataset.names = "genie_train"
         cfg.dataloader.train.mapper['project_dir'] = custom_args["project_dir"]
         cfg.dataloader.train.mapper._target_ = GENIEDatasetDETRMapper
         cfg.dataloader.train.total_batch_size = custom_args["total_batch_size"]
         cfg.dataloader.train.num_workers = custom_args["num_workers"]
 
-        cfg.dataloader.test.dataset.names="genie_test"
+        cfg.dataloader.test.dataset.names = "genie_test"
         cfg.dataloader.test.mapper['project_dir'] = custom_args["project_dir"]
         cfg.dataloader.test.mapper._target_ = GENIEDatasetDETRMapper
         cfg.dataloader.test.num_workers = custom_args["num_workers"]
@@ -345,19 +347,21 @@ def modify_cfg(cfg, custom_args: dict):
     cfg.train.output_dir = custom_args["cache_dir"]
     cfg.train.checkpointer.period = cfg.train.eval_period
 
-    if cfg.model.get("num_classes", None) is not None:
-        cfg.model.num_classes = custom_args["num_classes"]
-    if cfg.model.criterion.get("num_classes", None) is not None:
-        cfg.model.criterion.num_classes = custom_args["num_classes"]
+    if custom_args.get("num_classes", None) is not None:
+        if cfg.model.get("num_classes", None) is not None:
+            cfg.model.num_classes = custom_args["num_classes"]
+        if cfg.model.criterion.get("num_classes", None) is not None:
+            cfg.model.criterion.num_classes = custom_args["num_classes"]
 
-    return cfg
+    return cfg, custom_args.get("eval_params", None)
+
 
 def main(args, custom_args):
     cfg = LazyConfig.load(args.config_file)
     cfg = LazyConfig.apply_overrides(cfg, args.opts)
-    cfg = modify_cfg(cfg, custom_args=custom_args)
+    cfg, eval_params = modify_cfg(cfg, custom_args=custom_args)
     default_setup(cfg, args)
-    
+
     # Enable fast debugging by running several iterations to check for any bugs.
     if cfg.train.fast_dev_run.enabled:
         cfg.train.max_iter = 20
@@ -366,10 +370,12 @@ def main(args, custom_args):
     cfg.train.checkpointer.period = cfg.train.eval_period
 
     if args.eval_only:
+        assert eval_params is not None, "eval_params it is not specified"
+        print(eval_params)
         model = instantiate(cfg.model)
         model.to(cfg.train.device)
         model = create_ddp_model(model)
-        
+
         # using ema for evaluation
         ema.may_build_model_ema(cfg, model)
         DetectionCheckpointer(model, **ema.may_get_ema_checkpointer(cfg, model)).load(cfg.train.init_checkpoint)

@@ -49,7 +49,8 @@ def load_genie_dataset(data_ids, project_dir):
 def register_genie_dataset(name: str,
                            data_ids: dict,
                            project_dir: str,
-                           metadata: dict):
+                           metadata: dict,
+                           num_classes: int = None):
     
     assert os.path.isdir(project_dir), "Project Directory doesn't exist."
     if data_ids.get("augmented_set") is not None:
@@ -59,7 +60,10 @@ def register_genie_dataset(name: str,
                                                              project_dir=project_dir))
     
     with open(os.path.join(project_dir, "metadata.json")) as j_file:
-        classes = json.load(j_file)["classes"]
+        if num_classes:
+            classes = json.load(j_file)["classes"][:num_classes]
+        else:
+            classes = json.load(j_file)["classes"]
 
     MetadataCatalog.get(name).set(
         thing_classes=classes, evaluator_type="coco", **metadata
