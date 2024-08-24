@@ -9,8 +9,10 @@ import torch
 import detectron2.data.transforms as T
 from detectron2.data import MetadataCatalog
 from detectron2.structures import Instances
+from detectron2.data.detection_utils import read_image
 from detectron2.utils.video_visualizer import VideoVisualizer
 from detectron2.utils.visualizer import ColorMode, Visualizer
+import torchvision
 import torch.nn.functional as F
 
 
@@ -18,21 +20,21 @@ def filter_predictions_with_confidence(predictions, confidence_threshold=0.5):
     if "instances" in predictions:
         preds = predictions["instances"]
         keep_idxs = preds.scores > confidence_threshold
-        predictions = copy(predictions) # don't modify the original
+        predictions = copy(predictions)  # don't modify the original
         predictions["instances"] = preds[keep_idxs]
     return predictions
 
 
 class VisualizationDemo(object):
     def __init__(
-        self,
-        model,
-        min_size_test=800,
-        max_size_test=1333,
-        img_format="RGB",
-        metadata_dataset="coco_2017_val",
-        instance_mode=ColorMode.IMAGE,
-        parallel=False,
+            self,
+            model,
+            min_size_test=800,
+            max_size_test=1333,
+            img_format="RGB",
+            metadata_dataset="coco_2017_val",
+            instance_mode=ColorMode.IMAGE,
+            parallel=False,
     ):
         """
         Args:
@@ -166,12 +168,12 @@ class VisualizationDemo(object):
 
 class DefaultPredictor:
     def __init__(
-        self,
-        model,
-        min_size_test=800,
-        max_size_test=1333,
-        img_format="RGB",
-        metadata_dataset="coco_2017_val",
+            self,
+            model,
+            min_size_test=800,
+            max_size_test=1333,
+            img_format="RGB",
+            metadata_dataset="coco_2017_val",
     ):
         self.model = model
         # self.model.eval()
@@ -202,7 +204,7 @@ class DefaultPredictor:
                 original_image = original_image[:, :, ::-1]
             image = self.aug.get_transform(original_image).apply_image(original_image)
             image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
-            
+
             height, width = original_image.shape[:2]
             inputs = {"image": image, "height": height, "width": width}
             predictions = self.model([inputs])[0]
@@ -215,16 +217,16 @@ class GENIEPredictor:
                  min_size_test=800,
                  max_size_test=1333,
                  img_format="RGB",
-                 metadata_dataset="genie_test",
                  confidence_threshold=0.5,
+                 iou_threshold=0.5,
                  high_embed: bool = False): # Multiple Feature Embeddings. If sets to true returns embedding with high dim.
         self.model=model
         self.model.eval()
-        self.metadata = MetadataCatalog.get(metadata_dataset)
         self.aug = T.ResizeShortestEdge([min_size_test, min_size_test], max_size_test)
         self.input_format = img_format
         self.confidence_threshold = confidence_threshold
         self.high_embed = high_embed
+        self.iou_threshold = iou_threshold
         assert self.input_format in ["RGB", "BGR"], self.input_format
 
     def get_embeddings(self, batched_inputs: list):
@@ -239,13 +241,14 @@ class GENIEPredictor:
     def get_all_probs(self, batched_inputs: list, threshold: float = 0.5):
         self.model.return_all_probs = True
         scores = self.model(batched_inputs)
-        scores = F.softmax(scores, dim=-1)[:, :, :-1]
+        scores = F.softmax(scores, dim=-1)
         return scores[scores.max(-1)[0] >= threshold]
 
 
-    def __call__(self, original_image, return_type="all", as_numpy=False):
-        if self.input_format == "RGB":
-            original_image = original_image[:, :, ::-1]
+    def __call__(self, img_path, return_type="all", as_numpy=False):
+        original_image = read_image(img_path, format=self.input_format)
+        # if self.input_format == "RGB":
+        #     original_image = original_image[:, :, ::-1]
         image = self.aug.get_transform(original_image).apply_image(original_image)
         image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
         height, width = original_image.shape[:2]
@@ -253,7 +256,24 @@ class GENIEPredictor:
 
         with torch.no_grad():
             if return_type == "all":
-                predictions = self.model([inputs])[0]
+                predictions = self.model([inputs])[0]['instances']
+                # predictions._fields['pred_boxes'] = BoxMode.convert(predictions._fields['pred_boxes'],
+                #                                                     from_mode=BoxMode.XYWH_REL,
+                #                                                     to_mode=BoxMode.XYXY_ABS
+                #                                                     )
+                keep_idxs = predictions.scores > self.confidence_threshold
+                predictions = predictions[keep_idxs]
+                idx = torchvision.ops.nms(boxes=predictions._fields['pred_boxes'].tensor,
+                                          scores=predictions._fields['scores'],
+                                          iou_threshold=self.iou_threshold)
+                if as_numpy:
+                    predictions = {"bboxes": predictions._fields['pred_boxes'][idx].tensor.cpu().numpy(),
+                                  "class_ids": predictions._fields['pred_classes'][idx].cpu().numpy(),
+                                  "size": list(predictions.image_size)}
+                else:
+                    predictions = {"bboxes": predictions._fields['pred_boxes'][idx].tensor,
+                                  "class_ids": predictions._fields['pred_classes'][idx],
+                                  "size": list(predictions.image_size)}
                 # predictions = filter_predictions_with_confidence(predictions, self.confidence_threshold)
                 return predictions
             elif return_type == "all_probs":
@@ -269,7 +289,7 @@ class GENIEPredictor:
             else:
                 raise ValueError(f"Invalid return_type - {return_type}. should be only among ['all', 'all_probs', 'emebddings']")
 
-            
+
 class AsyncPredictor:
     """
     A predictor that runs the model asynchronously, possibly on >1 GPUs.
@@ -282,14 +302,14 @@ class AsyncPredictor:
 
     class _PredictWorker(mp.Process):
         def __init__(
-            self,
-            model,
-            task_queue,
-            result_queue,
-            min_size_test=800,
-            max_size_test=1333,
-            img_format="RGB",
-            metadata_dataset="coco_2017_val",
+                self,
+                model,
+                task_queue,
+                result_queue,
+                min_size_test=800,
+                max_size_test=1333,
+                img_format="RGB",
+                metadata_dataset="coco_2017_val",
         ):
             self.model = model
             self.min_size_test = min_size_test

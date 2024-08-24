@@ -16,6 +16,8 @@ import logging
 import os
 import sys
 import time
+import math
+import json
 import torch
 from torch.nn.parallel import DataParallel, DistributedDataParallel
 
@@ -356,6 +358,73 @@ def modify_cfg(cfg, custom_args: dict):
     return cfg, custom_args.get("eval_params", None)
 
 
+def format_results(result, metadata):
+    result = result['bbox']
+    out = {"tables": list(),
+           "plots": None}
+    n_classes = metadata.pop('num_classes')
+    table = {"columns": ["Name", "Value"],
+             "index": list(),
+             "data": list()}
+    table['index'].append(0)
+    table['data'].append(["Model ID", metadata.pop('model_id')])
+    table['index'].append(1)
+    table['data'].append(["Number of Classes", n_classes])
+    out['tables'].append({"name": "Details of Checkpoint",
+                          "data": table})
+
+    table = {"columns": ["Metric", "Value"],
+             "index": list(),
+             "data": list()}
+    table['index'].append(0)
+    table['data'].append(['mAP@IoU.5', result.pop('mAP@IoU.5') if not math.isnan(result['mAP@IoU.5']) else 0])
+    table['index'].append(1)
+    table['data'].append(['mAP@IoU.75', result.pop('mAP@IoU.75') if not math.isnan(result['mAP@IoU.75']) else 0])
+    table['index'].append(2)
+    table['data'].append(['mAP', result.pop('mAP') if not math.isnan(result['mAP']) else 0])
+    table['index'].append(3)
+    table['data'].append(['mAR', result.pop('mAR') if not math.isnan(result['mAR']) else 0])
+    table['index'].append(4)
+    table['data'].append(['mAR@Det1', result.pop('mAR@Det1') if not math.isnan(result['mAR@Det1']) else 0])
+    table['index'].append(5)
+    table['data'].append(['mAR@Det10', result.pop('mAR@Det10') if not math.isnan(result['mAR@Det10']) else 0])
+    out['tables'].append({"name": "Common Evaluation Metrics",
+                          "data": table})
+
+    table = {"columns": ["Name", "mAP", "mAR"],
+             "index": list(),
+             "data": list()}
+    for idx, name in enumerate(['Small', 'Medium', 'Large']):
+        table['index'].append(idx)
+        table['data'].append([name,
+                              result.pop(f'mAP-{name}') if not math.isnan(result[f'mAP-{name}']) else 0,
+                              result.pop(f'mAR-{name}') if not math.isnan(result[f'mAR-{name}']) else 0])
+    out['tables'].append({"name": "Evaluation Metrics Based on Size",
+                          "data": table})
+
+    table = {"columns": ["Name", "mAP", "mAR"],
+             "index": list(),
+             "data": list()}
+    idx = 0
+    for key, val in result.items():
+        if key.startswith('mAP'):
+            cls_name = key.split('-')[-1]
+            table['index'].append(idx)
+            if math.isnan(val):
+                val = 0
+            table['data'].append([cls_name,
+                                  val,
+                                  result[f"mAR-{cls_name}"] if not math.isnan(result[f"mAR-{cls_name}"]) else 0])
+            idx += 1
+        else:
+            continue
+        if idx == n_classes:
+            break
+    out['tables'].append({"name": "Class-Wise Evaluation Metrics",
+                          "data": table})
+    return out
+
+
 def main(args, custom_args):
     cfg = LazyConfig.load(args.config_file)
     cfg = LazyConfig.apply_overrides(cfg, args.opts)
@@ -363,7 +432,7 @@ def main(args, custom_args):
     default_setup(cfg, args)
 
     # Enable fast debugging by running several iterations to check for any bugs.
-    if cfg.train.fast_dev_run.enabled:
+    if True:
         cfg.train.max_iter = 20
         cfg.train.eval_period = 5
         cfg.train.log_period = 1
@@ -371,7 +440,7 @@ def main(args, custom_args):
 
     if args.eval_only:
         assert eval_params is not None, "eval_params it is not specified"
-        print(eval_params)
+        eval_params.update({"num_classes": custom_args["num_classes"]})
         model = instantiate(cfg.model)
         model.to(cfg.train.device)
         model = create_ddp_model(model)
@@ -382,7 +451,10 @@ def main(args, custom_args):
         # Apply ema state for evaluation
         if cfg.train.model_ema.enabled and cfg.train.model_ema.use_ema_weights_for_eval_only:
             ema.apply_model_ema(model)
-        print(do_test(cfg, model, eval_only=True))
+        result = do_test(cfg, model, eval_only=True)
+        result = format_results(result, eval_params)
+        with open(eval_params['save_path'], 'w') as j_file:
+            json.dump(result, j_file)
     else:
         do_train(args, cfg)
 

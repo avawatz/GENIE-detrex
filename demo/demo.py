@@ -17,8 +17,7 @@ from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import LazyConfig, instantiate
 from detectron2.data.detection_utils import read_image
 from detectron2.utils.logger import setup_logger
-from tools.train_net import modify_cfg
-
+from genie_detrex.tools.train_net import modify_cfg
 
 # constants
 WINDOW_NAME = "COCO detections"

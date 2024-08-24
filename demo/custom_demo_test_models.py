@@ -119,7 +119,7 @@ def custom_inference_main(custom_settings):
     args.output = custom_settings["save_dir"]
     args.config_file = custom_settings["config"]
     cfg = setup(args)
-    cfg = modify_cfg(cfg, custom_settings)
+    cfg, eval_params = modify_cfg(cfg, custom_settings)
 
     model = instantiate(cfg.model)
     model.to(cfg.train.device)
@@ -132,8 +132,7 @@ def custom_inference_main(custom_settings):
         model=model,
         min_size_test=args.min_size_test,
         max_size_test=args.max_size_test,
-        img_format=args.img_format,
-        metadata_dataset=args.metadata_dataset,
+        img_format=args.img_format
     )
 
     if custom_settings["files"]:
@@ -142,8 +141,8 @@ def custom_inference_main(custom_settings):
         #     assert args.input, "The input path(s) was not found"
         for path in tqdm.tqdm(custom_settings["files"]):
             # use PIL, to be consistent with evaluation
-            path = os.path.join(custom_settings['project_dir'], 'images', path)
-            img = read_image(path, format="BGR")
+            img = os.path.join(custom_settings['project_dir'], 'images', path)
+            # img = read_image(path, format="BGR")
             start_time = time.time()
             print(type(demo(img)))
             print(demo(img, return_type="all_probs").shape)
@@ -237,15 +236,13 @@ def get_python_files_recursively(folder_path):
     return python_files
 
 
-from detectron2.data.catalog import _DatasetCatalog, _MetadataCatalog, DatasetCatalog, MetadataCatalog
-
 if __name__ == "__main__":
     save_dir = "./test"
     os.makedirs(save_dir, exist_ok=True)
-    for name in os.listdir("/content/GENIE-detrex/projects"):
+    for name in os.listdir("/content/genie_detrex/projects"):
         if name in ["sqr_detr", "co_mot", "maskdino"]:
             continue
-        configs = get_python_files_recursively(f"/content/GENIE-detrex/projects/{name}/configs")
+        configs = get_python_files_recursively(f"/content/genie_detrex/projects/{name}/configs")
         if not len(configs):
             continue
         for config in tqdm.tqdm(configs):
