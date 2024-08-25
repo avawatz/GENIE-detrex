@@ -12,9 +12,10 @@ def setup(args):
     cfg = LazyConfig.apply_overrides(cfg, args.opts)
     return cfg
 
+
 def get_detrex_inference_model(custom_settings):
-    args = get_parser().parse_args()
-    args.config_file=custom_settings['config_file']
+    args = get_parser().parse_args(["--config-file", custom_settings['config_file']])
+    # args.config_file=custom_settings['config_file']
     setup_logger(name="fvcore")
     logger = setup_logger()
     logger.info("Arguments: " + str(args))

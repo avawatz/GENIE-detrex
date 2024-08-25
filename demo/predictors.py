@@ -235,15 +235,15 @@ class GENIEPredictor:
             images = images[0]
         features = self.model.backbone(images.tensor)
         features = features[list(features.keys())[1 if self.high_embed else 0]]
-        features = torch.flatten(features, start_dim=2, end_dim=len(features.shape)-1).mean(dim=-1)
+        features = torch.flatten(features, start_dim=2, end_dim=len(features.shape)-1).mean(dim=-1).squeeze(dim=0)
         return features
 
-    def get_all_probs(self, batched_inputs: list, threshold: float = 0.5):
+    def get_all_probs(self, batched_inputs: list):
         self.model.return_all_probs = True
         scores = self.model(batched_inputs)
         scores = F.softmax(scores, dim=-1)
-        return scores[scores.max(-1)[0] >= threshold]
-
+        self.model.return_all_probs = False
+        return scores[scores.max(-1)[0] >= self.confidence_threshold]
 
     def __call__(self, img_path, return_type="all", as_numpy=False):
         original_image = read_image(img_path, format=self.input_format)
@@ -266,21 +266,24 @@ class GENIEPredictor:
                 idx = torchvision.ops.nms(boxes=predictions._fields['pred_boxes'].tensor,
                                           scores=predictions._fields['scores'],
                                           iou_threshold=self.iou_threshold)
-                if as_numpy:
-                    predictions = {"bboxes": predictions._fields['pred_boxes'][idx].tensor.cpu().numpy(),
-                                  "class_ids": predictions._fields['pred_classes'][idx].cpu().numpy(),
-                                  "size": list(predictions.image_size)}
-                else:
-                    predictions = {"bboxes": predictions._fields['pred_boxes'][idx].tensor,
-                                  "class_ids": predictions._fields['pred_classes'][idx],
-                                  "size": list(predictions.image_size)}
-                # predictions = filter_predictions_with_confidence(predictions, self.confidence_threshold)
-                return predictions
+                return {"bboxes": predictions._fields['pred_boxes'][idx].tensor.int().cpu().tolist(),
+                        "class_ids": predictions._fields['pred_classes'][idx].int().cpu().tolist(),
+                        "confidences": predictions._fields['scores'][idx].cpu().round(decimals=3).tolist(),
+                        "size": list(predictions.image_size)}
+                # if as_numpy:
+                #     predictions = {"bboxes": predictions._fields['pred_boxes'][idx].tensor.cpu().numpy(),
+                #                   "class_ids": predictions._fields['pred_classes'][idx].cpu().numpy(),
+                #                   "size": list(predictions.image_size)}
+                # else:
+                #     predictions = {"bboxes": predictions._fields['pred_boxes'][idx].tensor,
+                #                   "class_ids": predictions._fields['pred_classes'][idx],
+                #                   "size": list(predictions.image_size)}
+                # return predictions
             elif return_type == "all_probs":
                 if as_numpy:
-                    return self.get_all_probs([inputs], self.confidence_threshold).cpu().numpy()
+                    return self.get_all_probs([inputs]).cpu().numpy()
                 else:
-                    return self.get_all_probs([inputs], self.confidence_threshold)
+                    return self.get_all_probs([inputs])
             elif return_type == "embeddings":
                 if as_numpy:
                     return self.get_embeddings([inputs]).cpu().numpy()

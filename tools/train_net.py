@@ -340,9 +340,12 @@ def modify_cfg(cfg, custom_args: dict):
         cfg.train.wandb.enabled = True
         cfg.train.wandb.params.project = custom_args["wandb"]["project"]
         cfg.train.wandb.params.name = None
-        cfg.train.wandb.dir = wandb_cache_dir
+        cfg.train.wandb.params.dir = wandb_cache_dir
         os.environ["WANDB_CACHE_DIR"] = wandb_cache_dir
         os.environ["WANDB_API_KEY"] = custom_args["wandb"]["api_key"]
+    else:
+        cfg.train.wandb.params.dir = custom_args["cache_dir"]
+        os.environ["WANDB_CACHE_DIR"] = custom_args["cache_dir"]
 
     if custom_args.get("init_checkpoint", None) is not None:
         cfg.train.init_checkpoint = custom_args["init_checkpoint"]
@@ -427,12 +430,13 @@ def format_results(result, metadata):
 
 def main(args, custom_args):
     cfg = LazyConfig.load(args.config_file)
-    cfg = LazyConfig.apply_overrides(cfg, args.opts)
+    # cfg = LazyConfig.apply_overrides(cfg, args.opts)
     cfg, eval_params = modify_cfg(cfg, custom_args=custom_args)
     default_setup(cfg, args)
 
-    # Enable fast debugging by running several iterations to check for any bugs.
-    if cfg.train.fast_dev_run.enabled:
+    # Enable fast debugging by running several iterations to check for any bugs
+    if True:
+    #if cfg.train.fast_dev_run.enabled:
         cfg.train.max_iter = 20
         cfg.train.eval_period = 5
         cfg.train.log_period = 1
